@@ -11,7 +11,7 @@
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 import os
 
@@ -62,28 +62,10 @@ class ResetRequest(BaseModel):
 # ENDPOINTS
 # ─────────────────────────────────────────────
 
-@app.get("/", summary="Welcome message")
+@app.get("/", summary="Welcome", include_in_schema=False)
 def root():
-    """
-    Root endpoint — returns a welcome message and links.
-    Visit /docs for the interactive Swagger UI.
-    """
-    return {
-        "message"     : "Welcome to the GitHub Issue Triage OpenEnv Environment!",
-        "version"     : "1.0.0",
-        "docs"        : "/docs",
-        "dashboard"   : "/dashboard",
-        "endpoints"   : {
-            "reset" : "POST /reset — Start a new episode",
-            "step"  : "POST /step  — Submit a triage action",
-            "state" : "GET  /state — Check current episode state",
-        },
-        "tasks": {
-            "task_1": "Issue Classification (Easy)   — 10 steps",
-            "task_2": "Priority Assignment (Medium)   — 8 steps",
-            "task_3": "Full Triage (Hard)             — 6 steps",
-        }
-    }
+    """Redirects to the visual dashboard."""
+    return RedirectResponse(url="/dashboard")
 
 
 @app.post("/reset", response_model=ResetResult, summary="Start a new episode")
