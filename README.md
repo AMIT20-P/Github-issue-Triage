@@ -1,3 +1,14 @@
+---
+title: GitHub Issue Triage
+emoji: 🐙
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+license: mit
+short_description: OpenEnv RL environment for AI agents to triage GitHub issues
+---
+
 # 🐙 GitHub Issue Triage — OpenEnv Environment
 
 > **MetaXScaler × Meta × PyTorch × Hugging Face Hackathon 2026**  
