@@ -12,6 +12,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 
@@ -47,6 +48,14 @@ app = FastAPI(
 # ─────────────────────────────────────────────
 
 env = GitHubTriageEnvironment()
+
+# Allow all origins so automated checkers and agents can access the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ─────────────────────────────────────────────
