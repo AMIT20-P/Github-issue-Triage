@@ -1,0 +1,109 @@
+# openenv.yaml
+# The identity card of this OpenEnv environment
+# Required by the OpenEnv specification
+# Judges and AI agents read this to understand what the environment is about
+
+name: github-issue-triage
+version: 1.0.0
+description: >
+  An OpenEnv-compatible reinforcement learning environment where AI agents
+  learn to triage GitHub issues. Agents classify issue types, assign priorities,
+  route issues to the correct engineering team, and estimate development effort.
+  Trained agents can save open-source maintainers hours of daily manual triage work.
+
+author: Amit
+repository: https://huggingface.co/spaces/amit/github-issue-triage
+
+domain: software-engineering
+task_type: multi-label-classification
+
+# Environment API
+api:
+  reset_endpoint: /reset
+  step_endpoint:  /step
+  state_endpoint: /state
+  port: 7860
+
+tasks:
+  - id: task_1
+    name: Issue Classification
+    difficulty: easy
+    description: >
+      Classify the GitHub issue into one of 5 types:
+      bug, feature, question, documentation, or duplicate.
+    max_steps: 10
+    fields_graded:
+      - issue_type
+    reward_range: [0.0, 1.0]
+
+  - id: task_2
+    name: Priority Assignment
+    difficulty: medium
+    description: >
+      Classify the issue type AND assign the correct priority level
+      (P1-Critical, P2-High, P3-Medium, P4-Low) based on user impact and severity.
+    max_steps: 8
+    fields_graded:
+      - issue_type
+      - priority
+    reward_range: [0.0, 1.0]
+
+  - id: task_3
+    name: Full Triage
+    difficulty: hard
+    description: >
+      Perform complete triage: classify type, assign priority, route to the
+      correct team (backend/frontend/devops/docs/security/support), and
+      estimate development effort (small/medium/large).
+    max_steps: 6
+    fields_graded:
+      - issue_type
+      - priority
+      - team
+      - estimated_effort
+    reward_range: [0.0, 1.0]
+
+# Reward design
+reward:
+  type: partial
+  description: >
+    Partial rewards at every level. Being 1 priority level off gives 0.5 reward
+    instead of 0.0, so agents always receive a meaningful learning signal.
+  scoring_weights:
+    task_3:
+      issue_type: 0.25
+      priority: 0.30
+      team: 0.30
+      estimated_effort: 0.15
+
+observation_space:
+  issue_id: string
+  title: string
+  body: string
+  repo: string
+  author_type: string
+  user_reports: integer
+  existing_labels: list
+  open_issues_count: integer
+  task_id: string
+  step_number: integer
+
+# Action space — what the agent can do
+action_space:
+  issue_type:
+    type: categorical
+    options: [bug, feature, question, documentation, duplicate]
+  priority:
+    type: categorical
+    options: [P1, P2, P3, P4]
+  team:
+    type: categorical
+    options: [backend, frontend, devops, documentation, security, support]
+  estimated_effort:
+    type: categorical
+    options: [small, medium, large]
+
+deployment:
+  platform: huggingface-spaces
+  type: docker
+  port: 7860

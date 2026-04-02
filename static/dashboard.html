@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GitHub Issue Triage — OpenEnv Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #21262d;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --green:     #3fb950;
+      --yellow:    #d29922;
+      --red:       #f85149;
+      --purple:    #bc8cff;
+      --orange:    #ffa657;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .logo { font-size: 22px; }
+    .header h1 { font-size: 18px; font-weight: 600; color: var(--text); }
+    .header p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .badge {
+      padding: 3px 10px; border-radius: 20px; font-size: 11px;
+      font-weight: 600; background: var(--surface2); border: 1px solid var(--border);
+    }
+    .badge.live { border-color: var(--green); color: var(--green); }
+
+    /* ── LAYOUT ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 340px 1fr 300px;
+      gap: 0;
+      height: calc(100vh - 65px);
+    }
+
+    /* ── PANELS ── */
+    .panel {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .panel:last-child { border-right: none; }
+    .panel-title {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); margin-bottom: 16px;
+    }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px;
+    }
+
+    /* ── TASK SELECTOR ── */
+    .task-btn {
+      width: 100%; padding: 10px 14px; margin-bottom: 8px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 13px;
+      font-family: 'Inter', sans-serif; cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      transition: all 0.15s ease;
+    }
+    .task-btn:hover  { border-color: var(--accent); background: #1c2333; }
+    .task-btn.active { border-color: var(--accent); background: #1c2333; color: var(--accent); }
+    .task-btn .diff  { font-size: 11px; margin-left: auto; }
+    .diff.easy   { color: var(--green); }
+    .diff.medium { color: var(--yellow); }
+    .diff.hard   { color: var(--red); }
+
+    /* ── START BTN ── */
+    .start-btn {
+      width: 100%; padding: 11px; background: var(--accent);
+      border: none; border-radius: 6px; color: #0d1117;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      font-family: 'Inter', sans-serif; transition: opacity 0.15s;
+    }
+    .start-btn:hover    { opacity: 0.85; }
+    .start-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── EPISODE STATE ── */
+    .state-row {
+      display: flex; justify-content: space-between;
+      padding: 6px 0; border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .state-row:last-child { border-bottom: none; }
+    .state-key   { color: var(--muted); }
+    .state-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+    /* ── PROGRESS BAR ── */
+    .progress-wrap { background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+    /* ── ISSUE CARD ── */
+    .issue-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      height: 100%;
+    }
+    .issue-meta {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .tag {
+      padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      background: var(--surface2); border: 1px solid var(--border);
+    }
+    .tag.repo  { color: var(--accent); border-color: var(--accent); }
+    .tag.users { color: var(--purple); border-color: var(--purple); }
+    .tag.task  { color: var(--orange); border-color: var(--orange); }
+
+    .issue-title {
+      font-size: 18px; font-weight: 600; margin-bottom: 12px; line-height: 1.4;
+    }
+    .issue-body {
+      font-size: 13px; color: var(--muted); line-height: 1.7;
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--surface2); border-radius: 6px;
+      padding: 14px; max-height: 200px; overflow-y: auto;
+      border: 1px solid var(--border);
+    }
+
+    /* ── ACTION FORM ── */
+    .action-section { margin-top: 20px; }
+    .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; font-weight: 600; text-transform: uppercase; }
+    select {
+      width: 100%; padding: 8px 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 13px;
+      font-family: 'Inter', sans-serif; cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    select:focus { outline: none; border-color: var(--accent); }
+
+    .submit-btn {
+      margin-top: 14px; width: 100%; padding: 12px;
+      background: var(--green); border: none; border-radius: 6px;
+      color: #0d1117; font-size: 14px; font-weight: 700;
+      cursor: pointer; font-family: 'Inter', sans-serif;
+      transition: opacity 0.15s;
+    }
+    .submit-btn:hover    { opacity: 0.85; }
+    .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── REWARD DISPLAY ── */
+    .reward-bar-wrap { margin: 16px 0; }
+    .reward-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+    .reward-value { font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .reward-fill  { height: 14px; border-radius: 7px; transition: width 0.5s ease, background 0.3s ease; }
+
+    /* ── HISTORY ── */
+    .history-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 6px; margin-bottom: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .h-step  { color: var(--muted); font-family: 'JetBrains Mono', monospace; min-width: 28px; }
+    .h-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .h-score { font-family: 'JetBrains Mono', monospace; font-weight: 600; min-width: 32px; text-align: right; }
+
+    /* ── FEEDBACK ── */
+    .feedback-box {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; font-size: 12px;
+      color: var(--muted); font-family: 'JetBrains Mono', monospace;
+      line-height: 1.6; margin-top: 10px; min-height: 50px;
+    }
+
+    /* ── PLACEHOLDER ── */
+    .placeholder {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 60%; gap: 12px; color: var(--muted);
+    }
+    .placeholder .icon { font-size: 48px; }
+    .placeholder p     { font-size: 14px; }
+
+    /* ── DONE BANNER ── */
+    .done-banner {
+      background: linear-gradient(135deg, #1a2f1a, #162616);
+      border: 1px solid var(--green); border-radius: 8px;
+      padding: 20px; text-align: center; margin-top: 20px;
+    }
+    .done-banner h3 { color: var(--green); font-size: 18px; margin-bottom: 8px; }
+    .done-banner p  { color: var(--muted); font-size: 13px; }
+    .done-score     { font-size: 36px; font-weight: 700; color: var(--green);
+                      font-family: 'JetBrains Mono', monospace; margin: 10px 0; }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .hidden { display: none; }
+    .mono   { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <span class="logo">🐙</span>
+    <div>
+      <h1>GitHub Issue Triage Environment</h1>
+      <p>OpenEnv · Reinforcement Learning · MetaXScaler Hackathon 2026</p>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <span class="badge live" id="serverStatus">● Connecting...</span>
+    <span class="badge" id="versionBadge">v1.0.0</span>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="layout">
+
+  <!-- ── PANEL 1: CONTROLS ── -->
+  <div class="panel">
+    <div class="panel-title">Control Panel</div>
+
+    <!-- Task Selection -->
+    <div class="card">
+      <div class="card-title">Select Task</div>
+      <button class="task-btn active" id="btn_task_1" onclick="selectTask('task_1')">
+        <span>📋</span>
+        <span>
+          <div style="font-weight:600">Issue Classification</div>
+          <div style="font-size:11px;color:var(--muted)">10 steps per episode</div>
+        </span>
+        <span class="diff easy">Easy</span>
+      </button>
+      <button class="task-btn" id="btn_task_2" onclick="selectTask('task_2')">
+        <span>🎯</span>
+        <span>
+          <div style="font-weight:600">Priority Assignment</div>
+          <div style="font-size:11px;color:var(--muted)">8 steps per episode</div>
+        </span>
+        <span class="diff medium">Medium</span>
+      </button>
+      <button class="task-btn" id="btn_task_3" onclick="selectTask('task_3')">
+        <span>⚡</span>
+        <span>
+          <div style="font-weight:600">Full Triage</div>
+          <div style="font-size:11px;color:var(--muted)">6 steps per episode</div>
+        </span>
+        <span class="diff hard">Hard</span>
+      </button>
+      <button class="start-btn" id="startBtn" onclick="startEpisode()">▶ Start Episode</button>
+    </div>
+
+    <!-- Episode State -->
+    <div class="card">
+      <div class="card-title">Episode State</div>
+      <div class="state-row">
+        <span class="state-key">Episode ID</span>
+        <span class="state-value mono" id="stEpisodeId">—</span>
+      </div>
+      <div class="state-row">
+        <span class="state-key">Task</span>
+        <span class="state-value" id="stTask">—</span>
+      </div>
+      <div class="state-row">
+        <span class="state-key">Status</span>
+        <span class="state-value" id="stStatus" style="color:var(--muted)">No episode</span>
+      </div>
+      <div style="margin-top:12px">
+        <div class="progress-label">
+          <span>Progress</span>
+          <span id="stStepLabel">0 / 0 steps</span>
+        </div>
+        <div class="progress-wrap" style="margin-top:5px">
+          <div class="progress-fill" id="stepProgress" style="width:0%;background:var(--accent)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Total Reward -->
+    <div class="card">
+      <div class="card-title">Cumulative Reward</div>
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-size:36px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--green)" id="totalReward">0.000</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">out of <span id="maxPossible">0.000</span> max</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PANEL 2: CURRENT ISSUE ── -->
+  <div class="panel" style="border-right:1px solid var(--border)">
+    <div class="panel-title">Current Issue</div>
+
+    <div id="placeholder" class="placeholder">
+      <div class="icon">📭</div>
+      <p>Select a task and click <strong>Start Episode</strong></p>
+      <p style="font-size:12px">The first GitHub issue will appear here</p>
+    </div>
+
+    <div id="issueView" class="hidden">
+      <div class="issue-card">
+        <div class="issue-meta">
+          <span class="tag repo" id="issueRepo">repo</span>
+          <span class="tag users" id="issueUsers">0 reports</span>
+          <span class="tag task" id="issueTask">task_1</span>
+          <span class="tag" id="issueAuthor">regular</span>
+        </div>
+        <div class="issue-title" id="issueTitle">Loading...</div>
+        <div class="issue-body" id="issueBody">Loading issue body...</div>
+
+        <!-- Action Form -->
+        <div class="action-section">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px;font-weight:600">
+            YOUR TRIAGE DECISION
+          </div>
+          <div class="action-grid">
+            <div>
+              <div class="field-label">Issue Type</div>
+              <select id="selType">
+                <option value="bug">🐛 Bug</option>
+                <option value="feature">✨ Feature Request</option>
+                <option value="question">❓ Question</option>
+                <option value="documentation">📖 Documentation</option>
+                <option value="duplicate">🔁 Duplicate</option>
+              </select>
+            </div>
+            <div>
+              <div class="field-label">Priority</div>
+              <select id="selPriority">
+                <option value="P1">🔴 P1 — Critical</option>
+                <option value="P2">🟠 P2 — High</option>
+                <option value="P3">🟡 P3 — Medium</option>
+                <option value="P4">🟢 P4 — Low</option>
+              </select>
+            </div>
+            <div>
+              <div class="field-label">Team</div>
+              <select id="selTeam">
+                <option value="backend">⚙️ Backend</option>
+                <option value="frontend">🎨 Frontend</option>
+                <option value="devops">🔧 DevOps</option>
+                <option value="documentation">📝 Documentation</option>
+                <option value="security">🔒 Security</option>
+                <option value="support">💬 Support</option>
+              </select>
+            </div>
+            <div>
+              <div class="field-label">Effort</div>
+              <select id="selEffort">
+                <option value="small">🟢 Small (&lt; 1 day)</option>
+                <option value="medium">🟡 Medium (1–3 days)</option>
+                <option value="large">🔴 Large (&gt; 3 days)</option>
+              </select>
+            </div>
+          </div>
+          <button class="submit-btn" id="submitBtn" onclick="submitAction()" disabled>
+            Submit Triage Decision →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Done Banner -->
+    <div id="doneBanner" class="done-banner hidden" style="margin-top:20px">
+      <h3>🎉 Episode Complete!</h3>
+      <div class="done-score" id="doneScore">0.000</div>
+      <p>Average reward across all steps</p>
+      <button class="start-btn" style="margin-top:16px;max-width:200px" onclick="startEpisode()">
+        ▶ Run Another Episode
+      </button>
+    </div>
+  </div>
+
+  <!-- ── PANEL 3: HISTORY + FEEDBACK ── -->
+  <div class="panel">
+    <div class="panel-title">Step History</div>
+
+    <!-- Last Reward -->
+    <div class="card">
+      <div class="card-title">Last Step Reward</div>
+      <div class="reward-bar-wrap">
+        <div class="reward-label">
+          <span>Score</span>
+          <span class="reward-value" id="lastReward">—</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-fill reward-fill" id="rewardBar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="feedback-box" id="feedbackBox">Waiting for submission...</div>
+    </div>
+
+    <!-- History List -->
+    <div class="card">
+      <div class="card-title">Step Log</div>
+      <div id="historyList">
+        <div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">
+          No steps yet
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API = 'http://localhost:7860';
+  let selectedTask = 'task_1';
+  let stepCount    = 0;
+  let maxSteps     = 10;
+  let totalReward  = 0;
+  let stepHistory  = [];
+  let episodeActive = false;
+
+  // ── Check server health ──────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${API}/health`);
+      if (r.ok) {
+        document.getElementById('serverStatus').textContent = '● Live';
+        document.getElementById('serverStatus').style.color = 'var(--green)';
+        document.getElementById('serverStatus').style.borderColor = 'var(--green)';
+      }
+    } catch {
+      document.getElementById('serverStatus').textContent = '● Offline';
+      document.getElementById('serverStatus').style.color = 'var(--red)';
+      document.getElementById('serverStatus').style.borderColor = 'var(--red)';
+    }
+  }
+  checkHealth();
+  setInterval(checkHealth, 5000);
+
+  // ── Select task ──────────────────────────
+  function selectTask(taskId) {
+    selectedTask = taskId;
+    ['task_1','task_2','task_3'].forEach(t => {
+      document.getElementById('btn_' + t).classList.remove('active');
+    });
+    document.getElementById('btn_' + taskId).classList.add('active');
+    maxSteps = taskId === 'task_1' ? 10 : taskId === 'task_2' ? 8 : 6;
+  }
+
+  // ── Start episode ────────────────────────
+  async function startEpisode() {
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('startBtn').textContent = 'Starting...';
+
+    try {
+      const r    = await fetch(`${API}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: selectedTask })
+      });
+      const data = await r.json();
+
+      // Reset state
+      stepCount    = 0;
+      totalReward  = 0;
+      stepHistory  = [];
+      episodeActive = true;
+      maxSteps = selectedTask === 'task_1' ? 10 : selectedTask === 'task_2' ? 8 : 6;
+
+      // Update UI
+      updateEpisodeState(data.episode_id, selectedTask, true);
+      showIssue(data.observation);
+      clearHistory();
+
+      document.getElementById('doneBanner').classList.add('hidden');
+      document.getElementById('placeholder').classList.add('hidden');
+      document.getElementById('issueView').classList.remove('hidden');
+      document.getElementById('submitBtn').disabled = false;
+      document.getElementById('startBtn').textContent = '↺ Restart Episode';
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('lastReward').textContent = '—';
+      document.getElementById('feedbackBox').textContent = 'Episode started! Submit your triage decision.';
+      document.getElementById('rewardBar').style.width = '0%';
+
+    } catch(e) {
+      alert('Error connecting to server. Make sure python app.py is running.');
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('startBtn').textContent = '▶ Start Episode';
+    }
+  }
+
+  // ── Submit action ────────────────────────
+  async function submitAction() {
+    if (!episodeActive) return;
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('submitBtn').textContent = 'Submitting...';
+
+    const action = {
+      issue_type:       document.getElementById('selType').value,
+      priority:         document.getElementById('selPriority').value,
+      team:             document.getElementById('selTeam').value,
+      estimated_effort: document.getElementById('selEffort').value,
+    };
+
+    try {
+      const r    = await fetch(`${API}/step`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(action)
+      });
+      const data = await r.json();
+
+      stepCount++;
+      totalReward = Math.round((totalReward + data.reward) * 1000) / 1000;
+
+      // Show reward
+      showReward(data.reward, data.feedback);
+
+      // Add to history
+      const issueTitle = document.getElementById('issueTitle').textContent;
+      addHistory(stepCount, issueTitle, data.reward);
+
+      // Update progress
+      updateProgress();
+      document.getElementById('totalReward').textContent = totalReward.toFixed(3);
+      document.getElementById('maxPossible').textContent = stepCount.toFixed(3);
+
+      if (data.is_done) {
+        episodeActive = false;
+        const avg = Math.round((totalReward / stepCount) * 1000) / 1000;
+        document.getElementById('issueView').classList.add('hidden');
+        document.getElementById('doneBanner').classList.remove('hidden');
+        document.getElementById('doneScore').textContent = avg.toFixed(3);
+        document.getElementById('stStatus').textContent = '✅ Complete';
+        document.getElementById('stStatus').style.color = 'var(--green)';
+        document.getElementById('submitBtn').textContent = 'Submit Triage Decision →';
+      } else {
+        showIssue(data.observation);
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').textContent = 'Submit Triage Decision →';
+      }
+
+    } catch(e) {
+      alert('Error submitting action. Check server connection.');
+      document.getElementById('submitBtn').disabled = false;
+      document.getElementById('submitBtn').textContent = 'Submit Triage Decision →';
+    }
+  }
+
+  // ── Show issue ───────────────────────────
+  function showIssue(obs) {
+    document.getElementById('issueTitle').textContent = obs.title;
+    document.getElementById('issueBody').textContent  = obs.body;
+    document.getElementById('issueRepo').textContent  = '📁 ' + obs.repo;
+    document.getElementById('issueUsers').textContent = '👥 ' + obs.user_reports + ' reports';
+    document.getElementById('issueTask').textContent  = obs.task_id;
+    document.getElementById('issueAuthor').textContent = '👤 ' + obs.author_type;
+  }
+
+  // ── Show reward ──────────────────────────
+  function showReward(reward, feedback) {
+    const pct   = Math.round(reward * 100);
+    const color = reward >= 0.8 ? 'var(--green)' : reward >= 0.4 ? 'var(--yellow)' : 'var(--red)';
+    document.getElementById('lastReward').textContent      = reward.toFixed(2);
+    document.getElementById('lastReward').style.color      = color;
+    document.getElementById('rewardBar').style.width       = pct + '%';
+    document.getElementById('rewardBar').style.background  = color;
+    document.getElementById('feedbackBox').textContent     = feedback;
+  }
+
+  // ── Update episode state ─────────────────
+  function updateEpisodeState(epId, task, active) {
+    document.getElementById('stEpisodeId').textContent = epId ? epId.slice(0,12) + '...' : '—';
+    document.getElementById('stTask').textContent      = task || '—';
+    document.getElementById('stStatus').textContent    = active ? '🟢 Running' : '—';
+    document.getElementById('stStatus').style.color   = active ? 'var(--green)' : 'var(--muted)';
+  }
+
+  // ── Update step progress ─────────────────
+  function updateProgress() {
+    const pct = Math.round((stepCount / maxSteps) * 100);
+    document.getElementById('stepProgress').style.width = pct + '%';
+    document.getElementById('stStepLabel').textContent  = stepCount + ' / ' + maxSteps + ' steps';
+  }
+
+  // ── History ──────────────────────────────
+  function addHistory(step, title, reward) {
+    const color = reward >= 0.8 ? 'var(--green)' : reward >= 0.4 ? 'var(--yellow)' : 'var(--red)';
+    const short = title.length > 35 ? title.slice(0,35) + '…' : title;
+    const item  = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `
+      <span class="h-step">#${String(step).padStart(2,'0')}</span>
+      <span class="h-title">${short}</span>
+      <span class="h-score" style="color:${color}">${reward.toFixed(2)}</span>
+    `;
+    document.getElementById('historyList').prepend(item);
+  }
+
+  function clearHistory() {
+    document.getElementById('historyList').innerHTML =
+      '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">No steps yet</div>';
+  }
+</script>
+</body>
+</html>
