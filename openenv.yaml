@@ -12,13 +12,14 @@ description: >
   Trained agents can save open-source maintainers hours of daily manual triage work.
 
 author: Amit
-repository: https://huggingface.co/spaces/amit/github-issue-triage
+repository: https://github.com/AMIT20-P/Github-issue-Triage
 
 domain: software-engineering
 task_type: multi-label-classification
 
 # Environment API
 api:
+  base_url: https://amitsj-github-issue-triage.hf.space
   reset_endpoint: /reset
   step_endpoint:  /step
   state_endpoint: /state

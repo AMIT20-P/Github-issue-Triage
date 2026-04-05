@@ -78,25 +78,24 @@ def root():
 
 
 @app.post("/reset", response_model=ResetResult, summary="Start a new episode")
-def reset(request: ResetRequest):
+def reset(request: ResetRequest = None):
     """
     **Start a new training episode.**
-
     - Clears all previous episode state
     - Returns the first GitHub issue for the agent to triage
-    - Agent must call this before calling /step
+    - Body is optional — defaults to task_1 if not provided
 
-    **Request body:**
+    **Request body (optional):**
     ```json
     { "task_id": "task_1" }
     ```
     task_id options: task_1 (easy) | task_2 (medium) | task_3 (hard)
     """
     try:
-        result = env.reset(task_id=request.task_id)
+        task_id = request.task_id if request else "task_1"
+        result = env.reset(task_id=task_id)
         return result
     except ValueError as e:
-        # Invalid task_id was sent
         raise HTTPException(status_code=400, detail=str(e))
 
 
