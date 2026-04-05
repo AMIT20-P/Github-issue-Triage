@@ -28,6 +28,6 @@ where = ["."]
 include = ["env*"]
 
 [project.scripts]
-server   = "app:start_server"
+server   = "app:main"
 infer    = "inference:main"
 baseline = "baseline:main"

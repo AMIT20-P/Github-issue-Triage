@@ -171,7 +171,7 @@ def dashboard():
 # (Not when imported by other files)
 # ─────────────────────────────────────────────
 
-def start_server():
+def main():
     """Named entry point for pyproject.toml scripts — runs the server."""
     import uvicorn
     uvicorn.run(
@@ -182,4 +182,4 @@ def start_server():
     )
 
 if __name__ == "__main__":
-    start_server()
+    main()
