@@ -435,7 +435,10 @@
 </div>
 
 <script>
-  const API = 'http://localhost:7860';
+  // Auto-detect: localhost when running locally, HF app URL when deployed
+  const API = window.location.hostname === 'localhost'
+    ? 'http://localhost:7860'
+    : window.location.origin;
   let selectedTask = 'task_1';
   let stepCount    = 0;
   let maxSteps     = 10;
