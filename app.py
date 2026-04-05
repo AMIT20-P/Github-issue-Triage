@@ -171,11 +171,15 @@ def dashboard():
 # (Not when imported by other files)
 # ─────────────────────────────────────────────
 
-if __name__ == "__main__":
+def start_server():
+    """Named entry point for pyproject.toml scripts — runs the server."""
     import uvicorn
     uvicorn.run(
         "app:app",
-        host    = "0.0.0.0",  # Accept connections from any IP
-        port    = 7860,        # Port 7860 is required by Hugging Face Spaces
-        reload  = False,       # No auto-reload in production
+        host   = "0.0.0.0",
+        port   = 7860,
+        reload = False,
     )
+
+if __name__ == "__main__":
+    start_server()
