@@ -1,14 +1,12 @@
 """
 Inference Script — GitHub Issue Triage OpenEnv
 ===================================
-LLM-based agent that triages GitHub issues using the OpenEnv environment.
+LLM-based agent that triages GitHub issues across ALL 3 tasks.
 
 MANDATORY environment variables:
     API_BASE_URL      The API endpoint for the LLM.
     MODEL_NAME        The model identifier to use for inference.
     HF_TOKEN          Your Hugging Face / API key.
-    ENV_BASE_URL      The OpenEnv environment URL (our HF Space).
-    TASK_NAME         Task to run: task_1 | task_2 | task_3 (default: task_3)
 
 Defaults reflect the active inference setup:
     API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
@@ -34,10 +32,18 @@ API_KEY      = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 # OpenEnv Environment Configuration
 # ─────────────────────────────────────────────
 ENV_BASE_URL = os.getenv("ENV_BASE_URL", "https://amitsj-github-issue-triage.hf.space")
-TASK_NAME    = os.getenv("TASK_NAME",    "task_3")
 BENCHMARK    = "github-issue-triage"
-MAX_STEPS    = 6
+
+# All 3 tasks MUST be run to satisfy grader requirements
+TASKS = [
+    {"id": "task_1", "name": "issue-classification",  "max_steps": 10},
+    {"id": "task_2", "name": "priority-assignment",    "max_steps": 8},
+    {"id": "task_3", "name": "full-triage",            "max_steps": 6},
+]
+
 SUCCESS_SCORE_THRESHOLD = 0.5
+# Epsilon to ensure score is never exactly 0.0 or 1.0
+SCORE_EPS = 0.01
 
 # ─────────────────────────────────────────────
 # LLM System Prompt
@@ -56,15 +62,15 @@ SYSTEM_PROMPT = textwrap.dedent("""
     }
 
     Priority guidelines:
-    - P1 (Critical): crashes, data loss, security, >500 affected users
-    - P2 (High):     major feature broken, enterprise impact, >50 users
+    - P1 (Critical): crashes, data loss, security issues, >500 affected users
+    - P2 (High):     major feature broken, enterprise impact, >50 users affected
     - P3 (Medium):   degraded feature, workaround exists
     - P4 (Low):      minor, cosmetic, nice-to-have, typos
 """).strip()
 
 
 # ─────────────────────────────────────────────
-# STDOUT Logging (required exact format)
+# STDOUT Logging (exact required format)
 # ─────────────────────────────────────────────
 def log_start(task: str, env: str, model: str) -> None:
     print(f"[START] task={task} env={env} model={model}", flush=True)
@@ -95,11 +101,11 @@ def get_triage_decision(client: OpenAI, observation: dict) -> dict:
     user_prompt = textwrap.dedent(f"""
         Triage this GitHub issue:
 
-        Title:       {observation.get('title', '')}
-        Repository:  {observation.get('repo', '')}
-        Author type: {observation.get('author_type', '')}
-        User reports:{observation.get('user_reports', 0)}
-        Labels:      {observation.get('existing_labels', [])}
+        Title:        {observation.get('title', '')}
+        Repository:   {observation.get('repo', '')}
+        Author type:  {observation.get('author_type', '')}
+        User reports: {observation.get('user_reports', 0)}
+        Labels:       {observation.get('existing_labels', [])}
 
         Body:
         {str(observation.get('body', ''))[:800]}
@@ -132,89 +138,109 @@ def get_triage_decision(client: OpenAI, observation: dict) -> dict:
 
 def _rule_based_fallback(observation: dict) -> dict:
     """Keyword-based fallback in case the LLM call fails."""
-    text = (observation.get("title", "") + " " + observation.get("body", "")).lower()
+    text         = (observation.get("title", "") + " " + observation.get("body", "")).lower()
     user_reports = observation.get("user_reports", 0)
 
     issue_type = (
-        "bug"           if any(w in text for w in ["crash","error","fail","broken","exception","500"])
-        else "feature"  if any(w in text for w in ["add","support","request","feature","new"])
-        else "question" if any(w in text for w in ["how","why","what","help"])
-        else "documentation" if any(w in text for w in ["docs","readme","typo","guide"])
+        "bug"           if any(w in text for w in ["crash", "error", "fail", "broken", "exception"])
+        else "feature"  if any(w in text for w in ["add", "support", "request", "feature", "new"])
+        else "question" if any(w in text for w in ["how", "why", "what", "help"])
+        else "documentation" if any(w in text for w in ["docs", "readme", "typo", "guide"])
         else "bug"
     )
     priority = (
-        "P1" if any(w in text for w in ["crash","security","data loss","injection"]) or user_reports > 500
+        "P1" if any(w in text for w in ["crash", "security", "data loss"]) or user_reports > 500
         else "P2" if user_reports > 50
         else "P3" if user_reports > 5
         else "P4"
     )
     team = (
-        "security"      if any(w in text for w in ["security","vulnerability","injection","xss"])
-        else "frontend" if any(w in text for w in ["ui","button","css","dark mode","design"])
-        else "devops"   if any(w in text for w in ["docker","aws","ci","pipeline","deploy"])
-        else "documentation" if any(w in text for w in ["docs","readme","guide"])
+        "security"      if any(w in text for w in ["security", "vulnerability", "injection"])
+        else "frontend" if any(w in text for w in ["ui", "button", "css", "dark mode"])
+        else "devops"   if any(w in text for w in ["docker", "aws", "ci", "pipeline"])
+        else "documentation" if any(w in text for w in ["docs", "readme", "guide"])
         else "backend"
     )
     effort = (
-        "small"  if any(w in text for w in ["typo","minor","quick","one line"])
-        else "large" if any(w in text for w in ["rewrite","architecture","major","entire"])
+        "small"  if any(w in text for w in ["typo", "minor", "quick"])
+        else "large" if any(w in text for w in ["rewrite", "architecture", "major"])
         else "medium"
     )
     return {"issue_type": issue_type, "priority": priority, "team": team, "estimated_effort": effort}
 
 
+def clamp_score(score: float) -> float:
+    """Ensure score is strictly between 0 and 1 (never exactly 0.0 or 1.0)."""
+    return SCORE_EPS + (max(0.0, min(1.0, score)) * (1.0 - 2 * SCORE_EPS))
+
+
 # ─────────────────────────────────────────────
-# Main Episode Loop
+# Single Task Episode
 # ─────────────────────────────────────────────
-def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+def run_task(client: OpenAI, http: httpx.Client, task: dict) -> None:
+    """Run one full episode for a single task, printing START/STEP/END."""
+    task_id   = task["id"]
+    task_name = task["name"]
+    max_steps = task["max_steps"]
 
     rewards:     List[float] = []
     steps_taken: int         = 0
     score:       float       = 0.0
     success:     bool        = False
 
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
+    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
     try:
-        with httpx.Client(base_url=ENV_BASE_URL, timeout=30.0) as http:
-            # ── Reset environment (OpenEnv.reset()) ──
-            reset_resp = http.post("/reset", json={"task_id": TASK_NAME})
-            reset_resp.raise_for_status()
-            data        = reset_resp.json()
-            observation = data["observation"]
+        # ── Reset environment (OpenEnv.reset()) ──
+        reset_resp = http.post("/reset", json={"task_id": task_id})
+        reset_resp.raise_for_status()
+        data        = reset_resp.json()
+        observation = data["observation"]
 
-            for step in range(1, MAX_STEPS + 1):
-                # ── Get LLM decision ──
-                action     = get_triage_decision(client, observation)
-                action_str = json.dumps(action, separators=(',', ':'))
+        for step in range(1, max_steps + 1):
+            # ── Get LLM decision ──
+            action     = get_triage_decision(client, observation)
+            action_str = json.dumps(action, separators=(',', ':'))
 
-                # ── Submit action (OpenEnv.step()) ──
-                step_resp = http.post("/step", json=action)
-                step_resp.raise_for_status()
-                result = step_resp.json()
+            # ── Submit action (OpenEnv.step()) ──
+            step_resp = http.post("/step", json=action)
+            step_resp.raise_for_status()
+            result = step_resp.json()
 
-                reward = float(result.get("reward",  0.0))
-                done   = bool( result.get("is_done", False))
-                error  = None
+            reward = float(result.get("reward",  0.0))
+            done   = bool( result.get("is_done", False))
+            error  = None
 
-                rewards.append(reward)
-                steps_taken = step
+            rewards.append(reward)
+            steps_taken = step
 
-                log_step(step=step, action=action_str, reward=reward, done=done, error=error)
+            log_step(step=step, action=action_str, reward=reward, done=done, error=error)
 
-                if done:
-                    break
-                observation = result.get("observation", observation)
+            if done:
+                break
+            observation = result.get("observation", observation)
 
-        score   = sum(rewards) / len(rewards) if rewards else 0.0
-        score   = min(max(score, 0.0), 1.0)
-        success = score >= SUCCESS_SCORE_THRESHOLD
+        raw_score = sum(rewards) / len(rewards) if rewards else 0.0
+        score     = clamp_score(raw_score)       # strictly between 0 and 1
+        success   = raw_score >= SUCCESS_SCORE_THRESHOLD
 
     except Exception as exc:
-        print(f"[DEBUG] Episode error: {exc}", flush=True)
+        print(f"[DEBUG] Task {task_id} error: {exc}", flush=True)
+        score = clamp_score(0.0)   # still emit a valid non-zero score
+
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+
+
+# ─────────────────────────────────────────────
+# Main — runs ALL 3 tasks
+# ─────────────────────────────────────────────
+def main() -> None:
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+    with httpx.Client(base_url=ENV_BASE_URL, timeout=30.0) as http:
+        for task in TASKS:
+            run_task(client, http, task)
 
 
 if __name__ == "__main__":
